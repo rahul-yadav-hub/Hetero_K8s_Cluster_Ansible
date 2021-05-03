@@ -20,3 +20,18 @@ ansible-playbook --vault-id .....@prompt Master.yml
 ansible-playbook -i hosts --vault-id .....@prompt Windows-worker.yml
 ### To run worker playbook(Linux Worker Node)
 ansible-playbook --vault-id .....@prompt Linux-worker.yml
+## Kubernetes dashboard access
+### List the service port for dashboard
+kubectl get service -n kubernetes-dashboard
+### Fetch token for dashboard
+kubectl -n kubernetes-dashboard get secret $(kubectl -n kubernetes-dashboard get sa/admin-user -o jsonpath="{.secrets[0].name}") -o go-template="{{.data.token | base64decode}}"
+## Deploy sample application
+### To deploy windows application
+kubectl apply -f windows-sample-deploy.yml
+### Expose deployment using Node Port
+kubectl expose deploy iis --type=NodePort --port=80
+### To deploy windows application
+kubectl apply -f linux-sample-deploy.yml
+### Expose deployment using Node Port
+kubectl expose deploy linux --type=NodePort --port=8080
+
