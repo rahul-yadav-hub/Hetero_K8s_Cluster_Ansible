@@ -14,6 +14,7 @@ Windows applications constitute a large portion of the services and applications
 ### Prerequisites
 - Create a ansible vault for aws access key ID and secret key
 - Must have dynamic inventory configured
+- Must have winRM installed in controller node
 ### To run master playbook (Master Node)
 ansible-playbook --vault-id .....@prompt Master.yml
 ### To run worker playbook(Windows Worker Node)
