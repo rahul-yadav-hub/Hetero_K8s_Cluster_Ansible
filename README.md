@@ -6,6 +6,8 @@ Windows applications constitute a large portion of the services and applications
 - Full automation using the playbook
 - Provisioning on AWS 
 - Mutli-Node heterogeneous cluster
+- Add more and more nodes by just running the plays
+- Automatic join worker nodes to master
 - Cluster supports linux as well as windows workloads
 - Kubernetes dashboard configured
 ## Installation
