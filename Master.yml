@@ -1,0 +1,131 @@
+- hosts: localhost
+  tasks:
+        - name: Include credentials file(vault)
+          include_vars: credentials.yml
+
+        - name: Provison ec2 instances for Master Node
+          ec2:
+            image: "ami-045e6fa7127ab1ac4"
+            instance_type: "t2.medium"
+            key_name: "ec2_os1"
+            wait: yes
+            count: 1
+            state: present
+            region: "ap-south-1"
+            vpc_subnet_id: "subnet-0f7a7f67"
+            group_id: "sg-0d301d8b5d2ad3990"
+            assign_public_ip: yes
+            instance_tags:
+              Name: Master
+            aws_access_key: "{{ user }}"
+            aws_secret_key: "{{ paswd }}"
+
+
+        - name: Updating the inventory or refreshing
+          meta: refresh_inventory
+
+- hosts: tag_Name_Master
+  tasks:
+        - name: Update Hostname
+          hostname:
+            name: "Master"
+        - name: Install Docker
+          package:
+            name : docker
+            state : present
+        - name : Start Docker Service and enable permanently
+          service :
+            name : docker
+            state : started
+            enabled : yes
+        - name : Add repo for kubernetes 
+          copy :
+            dest : "/etc/yum.repos.d/kubernetes.repo"
+            src : conf/kubernetes.repo 
+        - name : Install kubeadm, kubelet and kubectl
+          shell :
+            cmd : yum install -y kubelet kubeadm kubectl --disableexcludes=kubernetes
+        - name : Start Kubelet Service and enable permanently
+          service :
+            name : kubelet
+            state : started
+            enabled : yes
+        - name : Pull images need for Kubernetes initialization
+          shell :
+            cmd : kubeadm config images pull
+        - name : Change driver for Docker
+          copy :
+            dest : "/etc/docker/daemon.json"
+            src : conf/daemon.json
+        - name : Restart Docker Service
+          service :
+           name : docker
+           state : restarted
+        - name : Install iproute-tc 
+          package : 
+            name : iproute-tc
+            state : present
+        - name : Set IP Tables setting
+          copy :
+            src : conf/k8s.conf
+            dest : /etc/sysctl.d/k8s.conf
+        - name : Apply IP Table changes
+          shell : 
+            cmd : sysctl --system
+        - name : Initialize Master Node 
+          shell : 
+            cmd : kubeadm init --pod-network-cidr=10.244.0.0/16
+        - name : Capture Kubernetes Token from Master
+          shell :
+            cmd : kubeadm token create --print-join-command
+          register : token
+        - name : Save token in a file
+          local_action: copy content={{ token.stdout }} dest=/token.txt
+
+        - name : Configure Kubectl
+          shell : "{{ item }}"
+          with_items :
+          - "mkdir -p $HOME/.kube"
+          - "cp -i /etc/kubernetes/admin.conf $HOME/.kube/config"
+          - "chown $(id -u):$(id -g) $HOME/.kube/config"
+        - name : Copy flannel file for CNI
+          copy :
+            src : conf/flannel.yml
+            dest : /home/ec2-user/flannel.yml
+        - name : Deploying flannel
+          shell : 
+            cmd : kubectl apply -f flannel.yml
+        - name : Deploying  Windows-compatible versions of kube-proxy
+          shell :
+            cmd : curl -L https://github.com/kubernetes-sigs/sig-windows-tools/releases/latest/download/kube-proxy.yml | sed 's/VERSION/v1.21.0/g' | kubectl apply -f -
+        - name : Deploying Windows-compatible versions of flannel
+          shell :
+            cmd : kubectl apply -f https://github.com/kubernetes-sigs/sig-windows-tools/releases/latest/download/flannel-host-gw.yml
+        - name: Copy the Dashboard deployment, admin-user and Cluster role file from Controller to Master
+          copy:
+            src: "{{ item }}"
+            dest: /home/ec2-user/
+           loop: "{{ files }}"
+           vars:
+             files:
+             - "ClusterRoleBinding.yml"
+             - "admin-user.yml"
+             - "kubernetes-dashboard-deployment.yml"
+        - name : Deploying Kubernetes dasboard with admin user and role
+          shell :
+            cmd : "{{ item }}"
+          with_items :
+          - "kubectl apply -f kubernetes-dashboard-deployment.yml"
+          - "kubectl apply -f admin-user.yml"
+          - "kubectl apply -f ClusterRoleBinding.yml"
+        - name: Copy the sample deployment files from Controller to Master
+          copy:
+            src: "{{ item }}"
+            dest: /home/ec2-user/
+          loop: "{{ files }}"
+          vars:
+            files:
+            - "linux-sample-deploy.yml"
+            - "windows-sample-deploy.yml"
+
+

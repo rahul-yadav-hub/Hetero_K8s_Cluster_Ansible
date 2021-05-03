@@ -1,0 +1,15 @@
+localhost ansible_connection=local
+
+
+[win]
+
+
+[win:vars]
+
+token=tokendata
+ansible_connection=winrm
+ansible_ssh_port=5986
+ansible_ssh_user=Administrator
+ansible_ssh_pass=Password123!
+ansible_become=no
+ansible_winrm_server_cert_validation=ignore

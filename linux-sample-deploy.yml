@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: linux
+  labels:
+    app: linux
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: linux
+  template:
+    metadata:
+      labels:
+        app: linux
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+      containers:
+      - name: demo-linux-app
+        image: k8s.gcr.io/echoserver:1.4
+        ports:
+        - containerPort: 8080

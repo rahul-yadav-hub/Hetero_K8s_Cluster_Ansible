@@ -1,0 +1,101 @@
+- hosts: localhost
+  tasks:
+        - name: Include credentials file(vault)
+          include_vars: credentials.yml
+
+        - name: Provison ec2 instances for Linux Worker Node
+          ec2:
+            image: "ami-045e6fa7127ab1ac4"
+            instance_type: "t2.medium"
+            key_name: "ec2_os1"
+            wait: yes
+            count: 1
+            state: present
+            region: "ap-south-1"
+            vpc_subnet_id: "subnet-0f7a7f67"
+            group_id: "sg-0d301d8b5d2ad3990"
+            assign_public_ip: yes
+            instance_tags:
+              Name: LinuxWorker
+            aws_access_key: "{{ user }}"
+            aws_secret_key: "{{ paswd }}"
+
+
+        - name: Updating the inventory or refreshing
+          meta: refresh_inventory
+
+- hosts: tag_Name_LinuxWorker
+  tasks:
+        - name: Update Hostname
+          hostname:
+            name: "LinuxWorker1"
+        - name: Install Docker
+          package:
+            name : docker
+            state : present
+        - name : Start Docker Service and enable permanently
+          service :
+            name : docker
+            state : started
+            enabled : yes
+        - name : Add repo for kubernetes 
+          copy :
+            dest : "/etc/yum.repos.d/kubernetes.repo"
+            src : conf/kubernetes.repo 
+        - name : Install kubeadm, kubelet and kubectl
+          shell :
+            cmd : yum install -y kubelet kubeadm kubectl --disableexcludes=kubernetes
+        - name : Start Kubelet Service and enable permanently
+          service :
+            name : kubelet
+            state : started
+            enabled : yes
+        - name : Pull images need for Kubernetes initialization
+          shell :
+            cmd : kubeadm config images pull
+        - name : Change driver for Docker
+          copy :
+            dest : "/etc/docker/daemon.json"
+            src : conf/daemon.json
+        - name : Restart Docker Service
+          service :
+           name : docker
+           state : restarted
+        - name : Install iproute-tc 
+          package : 
+            name : iproute-tc
+            state : present
+        - name : Set IP Tables setting
+          copy :
+            src : conf/k8s.conf
+            dest : /etc/sysctl.d/k8s.conf
+        - name : Apply IP Table changes
+          shell : 
+            cmd : sysctl --system
+
+- hosts: tag_Name_Master
+  tasks:
+       - name : Capture Kubernetes Token from Master
+         shell :
+           cmd : kubeadm token create --print-join-command
+         register : token
+       - name : Print Token
+         debug :
+           var : token.stdout
+       - name: Add K8s Token and Hash to dummy host"
+         add_host:
+           name:   "K8S_TOKEN_HOLDER"
+           token:  "{{ token.stdout }}"
+       - name: Print join token
+         debug:
+           var: hostvars['K8S_TOKEN_HOLDER']['token']
+
+- hosts: tag_Name_LinuxWorker
+  tasks:
+        - name : Join to Master Node
+          shell : 
+            cmd : "{{ hostvars['K8S_TOKEN_HOLDER']['token'] }}"
+
+
+
+
